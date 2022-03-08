@@ -1,4 +1,4 @@
 # ignore query directory
-/data/query/*
+/data/query/J*
 /data/J*
 /*_results/*
