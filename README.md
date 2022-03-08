@@ -9,5 +9,3 @@ This notebook presents a demonstration of classifying Chandra Source Catalog v2 
 * This notebook was run in CIAO 4.14 with Python 3.9 
 * run 'bash install-packages.sh' under CIAO 4.14 environment to install all required packages 
 
- This notebook was run in CIAO 4.14 with Python 3.9
-run 'bash install-packages.sh' under CIAO 4.14 environment to install all required packages
