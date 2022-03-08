@@ -26,3 +26,5 @@ pip install colorcet
 pip install pyds9
 pip install seaborn
 pip install ipyaladin
+pip install holoviews
+pip install hvplot
