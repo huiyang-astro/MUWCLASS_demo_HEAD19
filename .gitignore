@@ -1,0 +1,4 @@
+# ignore query directory
+/data/query/*
+/data/J*
+/*_results/*
