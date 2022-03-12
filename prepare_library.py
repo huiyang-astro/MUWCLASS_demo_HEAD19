@@ -197,7 +197,7 @@ def stats(df, flx='flux_aper90_mean_', end='.1', drop=False):
 
 def flux2symmetric(df, flx='flux_aper90_',bands=['s', 'm','h'],end='.1'):
     # calculate the left & right uncertainties, the mean, the variance of the Fechner distribution for band fluxes
-    print("Run flux2symmetric......")
+    # print("Run flux2symmetric......")
     
     for band in bands:
         df['e_'+flx+'hilim_'+band+end] = df[flx+'hilim_'+band+end] - df[flx+''+band+end]
@@ -218,7 +218,7 @@ def cal_bflux(df, flx='flux_aper90_',end='.1'):
 
 def powlaw2symmetric(df, cols=['flux_powlaw','powlaw_gamma','powlaw_nh','powlaw_ampl'],end='.1'):
     # calculate the left & right uncertainties, the mean, the variance of the Fechner distribution for band fluxes
-    print("Run powlaw2symmetric......")
+    # print("Run powlaw2symmetric......")
     
     for col in cols:
         df['e_'+col+'_hilim'+end] = df[col+'_hilim'+end] - df[col+end]
@@ -269,7 +269,7 @@ def add_newdata(data, data_dir):
     return data
 
 def apply_flags_filter(data, instrument=True,sig=False,theta_flag=True, dup=True, sat_flag=True, pileup_warning=True, streak_flag=True,pu_signa_fil=False,verb=False):
-    print("Run apply_flags_filter......")
+    #print("Run apply_flags_filter......")
     
     data= data.fillna(exnum)
     
@@ -279,12 +279,12 @@ def apply_flags_filter(data, instrument=True,sig=False,theta_flag=True, dup=True
     if instrument:
         s = np.where(data['instrument']==' HRC')[0]
         data.loc[s, 'per_remove_code'] = data.loc[s, 'per_remove_code']+1
-        print('After dropping', str(len(s)),'detections with HRC instrument,', len(data[data['per_remove_code']==0]),'remain.')        
+        #print('After dropping', str(len(s)),'detections with HRC instrument,', len(data[data['per_remove_code']==0]),'remain.')        
 
     if theta_flag:
         s = np.where(data['theta']> 10)[0]
         data.loc[s, 'per_remove_code'] = data.loc[s, 'per_remove_code']+2
-        print('After dropping', str(len(s)),'detections with theta larger than 10\',', len(data[data['per_remove_code']==0]),'remain.')
+        #print('After dropping', str(len(s)),'detections with theta larger than 10\',', len(data[data['per_remove_code']==0]),'remain.')
         if verb:
             stats(data[data['per_remove_code']==0])
     
@@ -292,21 +292,21 @@ def apply_flags_filter(data, instrument=True,sig=False,theta_flag=True, dup=True
         s = np.where(data['sat_src_flag.1'] == True)[0]
         #print(str(sorted(Counter(data['Class'].iloc[s]).items())))
         data.loc[s, 'per_remove_code'] = data.loc[s, 'per_remove_code']+4
-        print("After dropping", len(s), " detections with sat_src_flag = TRUE,",  len(data[data['per_remove_code']==0]),'remain.')
+        #print("After dropping", len(s), " detections with sat_src_flag = TRUE,",  len(data[data['per_remove_code']==0]),'remain.')
         if verb:
             stats(data[data['per_remove_code']==0])
 
     if pileup_warning:
         s = np.where((data['pileup_warning'] > 0.3) & (data['pileup_warning'] != exnum))[0]
         data.loc[s, 'per_remove_code'] = data.loc[s, 'per_remove_code']+8
-        print("After dropping", len(s), " detections with pile_warning>0.3,", len(data[data['per_remove_code']==0]),'remain.')
+        #print("After dropping", len(s), " detections with pile_warning>0.3,", len(data[data['per_remove_code']==0]),'remain.')
         if verb:
             stats(data[data['per_remove_code']==0])
 
     if streak_flag:
         s = np.where(data['streak_src_flag.1'] == True)[0]
         data.loc[s, 'per_remove_code'] = data.loc[s, 'per_remove_code']+16
-        print("After dropping", len(s), " detections with streak_src_flag = TRUE,",  len(data[data['per_remove_code']==0]),'remain.')
+        #print("After dropping", len(s), " detections with streak_src_flag = TRUE,",  len(data[data['per_remove_code']==0]),'remain.')
         if verb:
             stats(data[data['per_remove_code']==0])
     
@@ -315,7 +315,7 @@ def apply_flags_filter(data, instrument=True,sig=False,theta_flag=True, dup=True
         s = np.where(data.set_index(['obsid','region_id','obi']).index.isin(data.groupby(['obsid','region_id','obi']).filter(lambda g:  len(g['name'].unique()) > 1 ).set_index(['obsid','region_id','obi']).index))[0]
         #data.iloc[s].to_csv('dup.csv',index=False)
         data.loc[s, 'per_remove_code'] = data.loc[s, 'per_remove_code']+32
-        print("After dropping", len(s), " detections assigned to different sources,",  len(data[data['per_remove_code']==0]),'remain.')
+        #print("After dropping", len(s), " detections assigned to different sources,",  len(data[data['per_remove_code']==0]),'remain.')
         if verb:
             stats(data[data['per_remove_code']==0])
 
@@ -323,14 +323,14 @@ def apply_flags_filter(data, instrument=True,sig=False,theta_flag=True, dup=True
         #s = np.where( (data['flux_significance_b']==exnum) | (data['flux_significance_b']==0)  | (np.isinf(data['PU'])) | (data['PU']==exnum))[0]
         s = np.where( (np.isinf(data['PU'])) | (data['PU']==exnum))[0]
         data.loc[s, 'per_remove_code'] = data.loc[s, 'per_remove_code']+64
-        print("After dropping", len(s), " detections having nan sig or inf PU,",  len(data[data['per_remove_code']==0]),'remain.')
+        #print("After dropping", len(s), " detections having nan sig or inf PU,",  len(data[data['per_remove_code']==0]),'remain.')
         if verb:
             stats(data[data['per_remove_code']==0])
     
     if sig:
         s = np.where(data['flux_significance_b']< sig)[0]
         data.loc[s, 'per_remove_code'] = data.loc[s, 'per_remove_code']+1
-        print('After dropping', str(len(s)),'detections with flux_significance_b less than', sig, len(data[data['per_remove_code']==0]),'remain.')
+        #print('After dropping', str(len(s)),'detections with flux_significance_b less than', sig, len(data[data['per_remove_code']==0]),'remain.')
         if verb:
             stats(data[data['per_remove_code']==0])
 
@@ -339,7 +339,7 @@ def apply_flags_filter(data, instrument=True,sig=False,theta_flag=True, dup=True
     return data
 
 def cal_theta_counts(df, df_ave, theta, net_count, err_count):
-    print("Run cal_theta_counts......")
+    #print("Run cal_theta_counts......")
 
     for col in [theta+'_mean', theta+'_median', 'e_'+theta, net_count, err_count]:
         df_ave[col] = np.nan
@@ -366,7 +366,7 @@ def cal_theta_counts(df, df_ave, theta, net_count, err_count):
 
 
 def cal_sig(df, df_ave, sig):
-    print("Run cal_sig......")
+    #print("Run cal_sig......")
 
     df_ave[sig+'_max'] = np.nan
     
@@ -403,7 +403,7 @@ def cal_cnt(df, df_ave, cnt, cnt_hi, cnt_lo):
             cnt_max = df.loc[max_ind, cnt]
             cnt_max_hi = df.loc[max_idx, cnt_hi] 
             cnt_max_lo = df.loc[max_idx, cnt_lo]
-            print(cnt_max, np.nanmax(df.loc[idx,cnt])) 
+            #print(cnt_max, np.nanmax(df.loc[idx,cnt])) 
 
         df_ave.loc[idx2, cnt+'_max'] = cnt_max
         df_ave.loc[idx2, cnt+'_max_hi'] = cnt_max_hi
@@ -414,7 +414,7 @@ def cal_cnt(df, df_ave, cnt, cnt_hi, cnt_lo):
 
 
 def cal_aveflux(df, df_ave, bands, flux_name, per_flux_name, fil = False, add2df=False):
-    print("Run cal_aveflux......")
+    #print("Run cal_aveflux......")
     
     for band in bands:
         col = flux_name+band
@@ -459,7 +459,7 @@ def cal_aveflux(df, df_ave, bands, flux_name, per_flux_name, fil = False, add2df
     return df, df_ave
 
 def cal_var(df, df_ave, b_ave,b_per):
-    print("Run cal_var......")
+    #print("Run cal_var......")
     
     new_cols = ['chisqr', 'dof', 'kp_prob_b_max','var_inter_prob','significance_max']
     for col in new_cols:
@@ -505,7 +505,7 @@ def combine_master(df_ave, bands=['s','m','h']):
     return df_ave
 
 def nan_flux(df_ave, flux_name):
-    print("Run nan_flux......")
+    #print("Run nan_flux......")
 
     df_ave['flux_flag'] = 0
 
@@ -535,7 +535,7 @@ def cal_ave(df, data_dir, dtype='TD', Chandratype='CSC',PU=False,cnt=False,plot=
 
     '''
     
-    print("Run cal_ave......")
+    #print("Run cal_ave......")
     print('There are',str(len(df)),'per-obs data.')
 
     df = df.fillna(exnum)
@@ -1032,7 +1032,7 @@ def counterpart_clean(df, X_PU='PU',catalog='gaia',X_mjd=57388.,pu_factor=1.5,pm
     #df.loc[s,'cp_flag_'+catalog] = df.loc[s,'cp_flag_'+catalog] + 1 
 
     s = np.where(df['_r_'+catalog]<=df['X_PU_'+catalog])[0]
-    print(len(s), 'MW counterparts remained for',catalog)
+    print(len(s), 'counterparts matched for',catalog)
     df.loc[s, 'cp_flag_'+catalog] = df.loc[s, 'cp_flag_'+catalog]+8
     
     #'''
@@ -1048,7 +1048,7 @@ def CSC_counterpart_clean(df, X_PU='err_ellipse_r0',catalog='gaia',pu_factor=1.5
         drop counterparts outside pu_factor * X-ray PUs in 95% confidence level where X-ray PUs are taking into account of MU PUs, proper motion uncertainties, parallaxes (and their uncertainties), astrometric noises, if any of those are available; flag suspicious counterparts if they are outside 95% PUs or other counterparts are also near the X-ray sources 
     '''
 
-    print(catalog)
+    #print(catalog)
     
     df['PU_'+catalog] = 0.
 
@@ -1103,7 +1103,7 @@ def CSC_counterpart_clean(df, X_PU='err_ellipse_r0',catalog='gaia',pu_factor=1.5
     df.loc[s,'cp_flag_'+catalog] = df.loc[s,'cp_flag_'+catalog] +2
 
     s = np.where(df['_r_'+catalog]<=df['X_PU_'+catalog])[0]
-    print(len(s), 'MW counterparts remained for',catalog)
+    print(len(s), 'counterparts matched for',catalog)
     df.loc[s, 'cp_flag_'+catalog] = df.loc[s, 'cp_flag_'+catalog]+8
     
     if 'rho_'+catalog in df.columns:
@@ -1126,14 +1126,14 @@ def confusion_clean(df, X_PU='err_ellipse_r0',X_mjd=57388.,Chandratype='CSC'):
 def remove_sources(CSC, remove_codes=[1, 2, 4, 8, 16, 32, 64], dtype='TD'):
     
     if 1 in remove_codes:
-        print("remove_code = 1: CSC flags")
+        #print("remove_code = 1: CSC flags")
         flags = ['extent_flag', 'pileup_flag','sat_src_flag', 'streak_src_flag','conf_flag']
         flags_remove = ['sat_src_flag', 'streak_src_flag']
         flags_record = ['extent_flag','conf_flag','pileup_flag']
 
-        for flag in flags:
-            print(len(CSC[CSC[flag]!=False]), 'sources with True ', flag)
-            print(flag, sorted(Counter(CSC[flag]).items()))
+        #for flag in flags:
+            #print(len(CSC[CSC[flag]!=False]), 'sources with True ', flag)
+            #print(flag, sorted(Counter(CSC[flag]).items()))
 
         s = np.where( (CSC['sat_src_flag']==1) | (CSC['streak_src_flag']==True)  )[0]
         CSC.loc[s, 'remove_code'] = CSC.loc[s, 'remove_code']+1
@@ -1148,17 +1148,18 @@ def remove_sources(CSC, remove_codes=[1, 2, 4, 8, 16, 32, 64], dtype='TD'):
                 CSC_flags.append("pileup")
             CSC.loc[i,"CSC_flags"] = "|".join(CSC_flags)
         
+        '''
         if dtype =='TD':
             print('Remove', len(s), sorted(Counter(CSC.loc[s, 'Class']).items()))
             print('Left', len(CSC[CSC['remove_code']==0]), sorted(Counter(CSC[CSC['remove_code']==0]['Class']).items()))
         elif dtype=='CSC':
             print('Remove', len(s))
             print('Left', len(CSC[CSC['remove_code']==0]))
-
+        '''
     if 32 in remove_codes:
-        print("remove_code = 32: NaN and/or zero fluxes in multiple bands")
+        #print("remove_code = 32: NaN and/or zero fluxes in multiple bands")
         
-        print(sorted(Counter(CSC['flux_flag']).items()))
+        #print(sorted(Counter(CSC['flux_flag']).items()))
         if dtype =='TD':
             print(sorted(Counter(CSC.loc[CSC['flux_flag']==7,'Class']).items()))
         CSC = CSC.replace(np.nan, exnum)
@@ -1167,14 +1168,14 @@ def remove_sources(CSC, remove_codes=[1, 2, 4, 8, 16, 32, 64], dtype='TD'):
         #s = np.where( (CSC[fn+'h']==exnum) | (CSC['e_'+fn+'h']==exnum) | (CSC[fn+'m']==exnum) | (CSC['e_'+fn+'m']==exnum) | (CSC[fn+'s']==exnum) | (CSC['e_'+fn+'s']==exnum) | (CSC[fn+'b']==exnum)  | (CSC['e_'+fn+'b']==exnum) )[0]
         s = np.where( CSC['flux_flag']==7 )[0]
         CSC.loc[s, 'remove_code'] = CSC.loc[s, 'remove_code'] + 32
-
+        '''
         if dtype == 'CXO' or dtype == 'CSC':
             print('Remove', len(s), 'sources.')
             print('Left', len(CSC[CSC['remove_code']==0]))
         elif dtype == 'TD': 
             print('Remove', len(s), sorted(Counter(CSC.loc[s, 'Class']).items()), 'sources removed.')
             print('Left', len(CSC[CSC['remove_code']==0]), sorted(Counter(CSC[CSC['remove_code']==0]['Class']).items()))
-
+        '''
 
         CSC = CSC.replace(exnum, np.nan)
         #s= np.where(((CSC[fn+'b']==exnum) | (CSC[fn+'b']==0)) &  ((CSC[fn+'h']>=0) | (CSC[fn+'m']>=0) | (CSC[fn+'s']>=0))  )[0]
@@ -1363,7 +1364,7 @@ def create_field_csc_data(data_dir,field_name,ra,dec,radius):#,name_type='CSCvie
 
 def CSC_clean_keepcols(CSC, remove_codes = [1, 32], withvphas=False):
 
-    print(len(CSC), ' sources in total.')
+    #print(len(CSC), ' sources in total.')
     # take the subset and calculate UnWISE magnitudes
     #fn = 'flux_aper90_ave_'
 
@@ -1415,14 +1416,14 @@ def CSC_clean_keepcols(CSC, remove_codes = [1, 32], withvphas=False):
     #CSC = CSC.drop(columns=['FW1_unwise','FW2_unwise','_r_gaia','_r_gaiadist', '_r_2mass','_r_catwise','_r_unwise','_r_allwise'])
     #CSC.to_csv('CSC_TD_v5_Topcat_removecode_v9.csv',index=False)
 
-    print(len(CSC[CSC['remove_code']==0]))
+    #print(len(CSC[CSC['remove_code']==0]))
 
     return CSC
 
 
 def CSC_clean(data, remove_codes = [1, 32], withvphas=False):
 
-    print(len(data), ' sources in total.')
+    #print(len(data), ' sources in total.')
     # take the subset and calculate UnWISE magnitudes
     fn = 'flux_aper90_ave_'
     cols = ['usrid','name','remove_code','ra','dec','err_ellipse_r0','err_ellipse_r1','err_ellipse_ang','significance',
@@ -1903,5 +1904,5 @@ def apply_astro_correct(field_name,data_dir,del_ra, del_dec, residlim,sig_astro,
     max_radius = 1. / 3600  # 1 arcsec
     dist1, ind1 = crossmatch_angular(Xcat1, Xcat2, max_radius)
 
-    print(dist1*3600)
+    #print(dist1*3600)
 

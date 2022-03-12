@@ -22,6 +22,7 @@ from pathlib import Path
 import time
 import matplotlib.lines as mlines
 from matplotlib.colors import LogNorm
+from sklearn.metrics import confusion_matrix
 
 def dict_update(a, b):
     a.update(b)
@@ -194,8 +195,8 @@ def find_obs(df_per, ra, dec):
     while sorted(df_obs.loc[df_obs.obsid.isin(obsids), 'name'].unique()) != sorted(df_obs['name'].unique()): 
         obsids.append(obsid_all[-1])
         obsid_all.pop()
-        print('ha')
-    print(obsids,obsid_all)
+        #print('ha')
+    #print(obsids,obsid_all)
     return obsids
 
 
@@ -224,7 +225,7 @@ def prepare_field(df, data_dir, query_dir, field_name, name_col='name',search_mo
     confusion = False if search_mode == 'cone_search' else True
     add_MW(df_ave, data_dir, field_name, Chandratype='CSC',confusion =confusion)
     end = time.time() 
-    print(end - start)
+    #print(end - start)
     #'''
     df_MW = pd.read_csv(f'{data_dir}/{field_name}_MW.csv')
     df_MW_cf = confusion_clean(df_MW,X_PU='err_ellipse_r0',Chandratype='CSC')
@@ -246,7 +247,34 @@ def prepare_field(df, data_dir, query_dir, field_name, name_col='name',search_mo
     
     return df_remove
 
-def combine_class_result(field_name, data_dir, dir_out, class_labels):
+def CMweight_probability(df, class_labels, TD_evaluation):
+
+    cm_precision = confusion_matrix(TD_evaluation.Class, TD_evaluation.true_Class, labels=class_labels)
+    cm_precision = cm_precision / cm_precision.sum(axis=1)[:,None]
+
+    for c in class_labels:
+        df = df.rename(columns={'P_'+c:'P_uw_'+c, 'e_P_'+c:'e_P_uw_'+c})
+    df = df.rename(columns={'Class':'Class_uw', 'Class_prob':'Class_prob_uw', 'Class_prob_e':'Class_prob_e_uw'})
+
+    # calculate weighted probabilities and errors using error propagation
+    df[['P_' + c for c in class_labels]] = df[['P_uw_' + c for c in class_labels]].dot(cm_precision)
+
+    # consider propagating errors using uncertainty in precision matrix too
+    df[['e_P_' + c for c in class_labels]] = np.sqrt(np.square(df[['e_P_uw_' + c for c in class_labels]]).dot(np.square(cm_precision)))
+
+    # get most probable class based on weighted probabilities
+    df['Class'] = df[['P_' + c for c in class_labels]].idxmax(axis="columns").str.strip('P_')
+
+    df['Class_prob'] = df[['P_' + c for c in class_labels]].max(axis=1)
+
+    # get most probable class errors
+    idx, cols = pd.factorize(df['Class'])
+    cols = 'e_P_' + cols
+    df['Class_prob_e'] = df.reindex(cols, axis=1).to_numpy()[np.arange(len(df)), idx]
+
+    return df
+     
+def combine_class_result(field_name, data_dir, dir_out, class_labels,TD_evaluation,weight_CM=False):
 
     df_all = pd.read_csv(f'{dir_out}/classes.csv')
     df_mean = df_all.groupby('name').mean().iloc[:,:len(class_labels)]
@@ -261,6 +289,34 @@ def combine_class_result(field_name, data_dir, dir_out, class_labels):
 
     df = pd.concat([pd.concat([df_mean, df_std, df_class, df_prob], axis=1).rename(columns={0:'Class',1:'Class_prob'}).rename_axis('name').reset_index(), df_prob_e], axis=1)
 
+    if weight_CM == True:
+        # calculate weighted probability by accounting the confusion matrix 
+
+        cm_precision = confusion_matrix(TD_evaluation.Class, TD_evaluation.true_Class, labels=class_labels)
+        cm_precision = cm_precision / cm_precision.sum(axis=1)[:,None]
+
+        for c in class_labels:
+            df = df.rename(columns={'P_'+c:'P_uw_'+c, 'e_P_'+c:'e_P_uw_'+c})
+        df = df.rename(columns={'Class':'Class_uw', 'Class_prob':'Class_prob_uw', 'Class_prob_e':'Class_prob_e_uw'})
+
+        # calculate weighted probabilities and errors using error propagation
+        df[['P_' + c for c in class_labels]] = df[['P_uw_' + c for c in class_labels]].dot(cm_precision)
+
+        # consider propagating errors using uncertainty in precision matrix too
+        df[['e_P_' + c for c in class_labels]] = np.sqrt(np.square(df[['e_P_uw_' + c for c in class_labels]]).dot(np.square(cm_precision)))
+
+        # get most probable class based on weighted probabilities
+        df['Class'] = df[['P_' + c for c in class_labels]].idxmax(axis="columns").str.strip('P_')
+
+        df['Class_prob'] = df[['P_' + c for c in class_labels]].max(axis=1)
+
+        # get most probable class errors
+        idx, cols = pd.factorize(df['Class'])
+        cols = 'e_P_' + cols
+        df['Class_prob_e'] = df.reindex(cols, axis=1).to_numpy()[np.arange(len(df)), idx]
+
+        #print(1-(df[['P_w_' + c for c in class_labels]].sum(1)))
+
 
     df_MW = pd.read_csv(f'{data_dir}/{field_name}_MW_remove.csv')
     df_MW = prepare_cols(df_MW, cp_thres=0, vphas=False,gaiadata=False)
@@ -274,7 +330,8 @@ def combine_class_result(field_name, data_dir, dir_out, class_labels):
     df_comb = pd.merge(df_comb, df_per[['name','ra','dec']], how='inner',on="name")
 
 
-    df = confident_flag(df_comb, method = 'sigma-mean', class_cols=class_labels)
+    #df = confident_flag(df_comb, method = 'sigma-mean', class_cols=class_labels)
+    df = confident_flag(df_comb, method = 'hard-cut',thres=0.75, class_cols=class_labels)
     df.to_csv(f'{dir_out}/{field_name}_class.csv',index=False)
 
     field_mw_class = pd.merge(df.drop(columns=['significance','Fcsc_m','ra','dec']), df_MW, on='name')
@@ -434,7 +491,7 @@ def plot_sed(TD_spec, field_spec, dir_plot, plot_class='YSO', save_html=False, n
     #classes = ['AGN', 'NS', 'BINARY-NS', 'CV', 'LM-STAR', 'HM-STAR', 'LMXB', 'HMXB', 'YSO']
     #classes = ['AGN', 'NS', 'CV', 'LM-STAR', 'HM-STAR', 'LMXB', 'HMXB', 'YSO']
 
-    scale_down=2
+    scale_down=4
 
     #for c in classes:
     TD_hover_cols = ['Flux', 'Band']
@@ -445,14 +502,14 @@ def plot_sed(TD_spec, field_spec, dir_plot, plot_class='YSO', save_html=False, n
             logy=True,
             # ylim=(1e-17, 1e-10),
             c='Source Density, Flux Norm',
-            cmap="gist_rainbow",
+            cmap="plasma",
             clabel='Source Density',
             xlabel='Frequency (Hz)',
             ylabel='Flux, Normalized to m-band',
             title='Normalized Spectra, '+plot_class,
             size=100/scale_down,
-            width=int(2000/scale_down),
-            height=int(2000/scale_down),
+            width=int(1500/scale_down),
+            height=int(1200/scale_down),
             fontscale=4/scale_down,
             hover_cols=TD_hover_cols
             ).opts(
@@ -472,7 +529,7 @@ def plot_sed(TD_spec, field_spec, dir_plot, plot_class='YSO', save_html=False, n
             logx=True,
             logy=True,
             #ylim=(1e-17, 1e-10),
-            color='k',
+            color='cyan',
             size=200/scale_down,                                                                   
             marker='d',                                                                      
             #cmap="gist_rainbow",
@@ -545,6 +602,21 @@ def plot_class_matrix(field_name, df, dir_plot, class_labels):
         plt.savefig(f'{dir_plot}/{field_name}_conf.png', bbox_inches='tight')
         plt.close(fig)
 
+    df_plot = df.sort_values(by=['Class_prob'])
+    df_plot = df_plot.iloc[[0, -1]]
+    #df_plot = df[(df.name==df_conf.iloc[0]['name']) | (df.name==df[~df.name.isin(df_conf.name)].iloc[0]['name'])].reset_index(drop=True)
+
+    #print(df_plot)
+
+    probs_ave = df_plot[[ 'P_'+clas for clas in class_labels] ]
+    probs_std = df_plot[[ 'e_P_'+clas for clas in class_labels]]
+    sources   = df_plot['name'].values
+    sources_plot = [str(df_plot.index[i]+1)+'. '+sources[i] for i in range(len(sources))]
+    preds = df_plot['Class']
+
+    fig = plot_classifier_matrix_withSTD(np.array(probs_ave), np.array(probs_std), preds, yaxis=np.array(sources_plot) #np.arange(field_probs.shape[0])
+                    , classes=class_labels, normalize=True,title=field_name, nocmap=True,cmap=plt.get_cmap('YlOrRd'))
+
   
 def prepare_evts_plot_xray_class(field_name, ra_field, dec_field, radius, data_dir, dir_out):
 
@@ -558,6 +630,8 @@ def prepare_evts_plot_xray_class(field_name, ra_field, dec_field, radius, data_d
 
     df_per = pd.read_csv(f'{data_dir}/{field_name}_per.csv')
     obsids = find_obs(df_per,ra_field,dec_field)#.astype(str)
+    if field_name == 'J1023-575':
+        obsids = [21848]
 
 
     os.system('rm -rf to_merge.sh')
@@ -645,7 +719,7 @@ def prepare_evts_plot_xray_class(field_name, ra_field, dec_field, radius, data_d
 
         dat_csv = pd.read_csv(f'{dir_out}/{field_name}_class.csv')
         if conf == '_conf':
-            dat_csv = dat_csv[dat_csv.conf_flag==1]#.reset_index(drop=True)
+            dat_csv = dat_csv[dat_csv.conf_flag>0]#.reset_index(drop=True)
         
         x_min, x_max, y_min, y_max = evt2_data[0].min(), evt2_data[0].max(), evt2_data[1].min(), evt2_data[1].max()    
         w, h = x_max - x_min, y_max - y_min     
@@ -770,26 +844,23 @@ def interactive_Ximg_class(field_name, evt2_data, fn_evt2, dir_out):
     x_min, x_max, y_min, y_max = evt2_data[0].min(), evt2_data[0].max(), evt2_data[1].min(), evt2_data[1].max()    
     w, h = x_max - x_min, y_max - y_min     
     cntr = [(x_max + x_min)/2, (y_max + y_min)/2]
-    NBINS = (4000, int(4000 * h / w))
-
-
+    NBINS = (3000, int(3000 * h / w))
 
     H, xe, ye = np.histogram2d(evt2_data[0], evt2_data[1],bins=NBINS)
 
-    sigma_y = 2.0
-    sigma_x = 2.0
-
-
+    sigma_y = 1
+    sigma_x = 1
 
     # Apply gaussian filter
     sigma = [sigma_y, sigma_x]
     H = sp.ndimage.filters.gaussian_filter(H, sigma, mode='constant')
 
     # produce an image of the 2d histogram
-    cxo_obs = hv.Image(np.flip(H.T, axis=0), bounds=(x_min, y_min,x_max, y_max)).opts(logz=True, cmap='viridis', clim=(0.01,H.max()), width=600, height=600)
+    #cxo_obs = hv.Image(np.flip(H.T, axis=0), bounds=(x_min, y_min,x_max, y_max)).opts( cmap='plasma', clim=(0.01,H.max()), width=3000, height=3000)
+    cxo_obs = hv.Image(np.flip(H.T, axis=0), bounds=(x_min, y_min,x_max, y_max)).opts(logz=True, cmap='hot', clim=(0.01,H.max()), width=3000, height=3000)
 
     dat_csv = pd.read_csv(f'{dir_out}/{field_name}_class.csv')
-    #dat_csv = dat_csv[dat_csv.conf_flag>0].reset_index(drop=True)
+    dat_csv = dat_csv[dat_csv.conf_flag>0].reset_index(drop=True)
     dat_csv[['reg_phys_x', 'reg_phys_y']] = get_reg_phys(fn_evt2, dat_csv)
 
     rmin = 5
@@ -802,17 +873,17 @@ def interactive_Ximg_class(field_name, evt2_data, fn_evt2, dir_out):
     s_mx, s_mn = dat_csv['significance'].max(), dat_csv['significance'].min()
     if s_mx == s_mn:
         s_mx = s_mn + 1  
-    dat_csv['ms'] = ((dat_csv['significance'] - s_mn)/(s_mx - s_mn) * (rmax - rmin) + rmin )*20
+    dat_csv['ms'] = ((dat_csv['significance'] - s_mn)/(s_mx - s_mn) * (rmax - rmin) + rmin )*30
     dat_csv['wd'] = 1* (dat_csv['Class_prob'] - c_mn) / (c_mx - c_mn) + 1
     #dat_csv['wd'] = dat_csv['Class_prob']*100
-    dat_conf = dat_csv[dat_csv.conf_flag>0].reset_index(drop=True)
+    #dat_conf = dat_csv[dat_csv.conf_flag>0].reset_index(drop=True)
 
 
-    markers=hv.dim("Class").categorize({'AGN': 'circle', 'NS': 'inverted_triangle', 'CV': 'hex', 'LM-STAR': 'star', 'HM-STAR': 'star', 'LMXB': 'circle_dot', 'YSO': 'diamond', 'Unconfident Classification': 'triangle'}, default="circle")
+    markers=hv.dim("Class").categorize({'AGN': 'circle', 'NS': 'inverted_triangle', 'CV': 'hex', 'LM-STAR': 'star', 'HM-STAR': 'triangle', 'LMXB': 'circle_dot', 'YSO': 'diamond', 'Unconfident Classification': 'triangle'}, default="circle")
 
-    class_scatter = dat_conf.hvplot.scatter('reg_phys_x', 'reg_phys_y', color="Class", marker=markers, size="ms",line_width='wd',hover_cols=['name', 'Class_prob','significance','wd'],#'wd','ms']
+    class_scatter = dat_csv.hvplot.scatter('reg_phys_x', 'reg_phys_y', color="Class", marker=markers, size="ms",line_width='wd',hover_cols=['name', 'Class_prob','significance','wd'],#'wd','ms']
         ).opts(
-        cmap={'AGN': 'blueviolet', 'NS': 'gold', 'CV': 'blue', 'LM-STAR': 'crimson', 'HM-STAR': 'deepskyblue', 'LMXB': 'black', 'YSO': 'lime', 'Unconfident Classification': 'gray'},
+        cmap={'AGN': 'cyan', 'NS': 'magenta', 'CV': 'blue', 'LM-STAR': 'gold', 'HM-STAR': 'deepskyblue', 'LMXB': 'orange', 'YSO': 'lime'},
         #size=hv.dim("Class").categorize({'Unconfident Classification': 20}, default=10),
         #line_width=hv.dim("wd"),
         alpha=0.,
@@ -838,8 +909,8 @@ def interactive_Ximg_class(field_name, evt2_data, fn_evt2, dir_out):
             # ylim=(1e28,1e32),
             xlabel="pixel",
             ylabel="pixel",
-            width=int(1000),
-            height=int(1000),
+            width=int(1200),
+            height=int(1200),
             fontscale=1,
             legend_position='top_left',
             fontsize={

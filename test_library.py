@@ -866,6 +866,33 @@ def class_train_and_classify(arr):
 
     return df_test, df_imp#, test_path, test_pred
 
+def class_train_model_and_classify(arr):
+    
+    [X_train, y_train, X_test, test_name], model = arr
+        
+    clf = model
+
+    clf.fit(X_train, y_train)
+
+    classes = clf.classes_ 
+
+    pred = clf.predict(X_test)
+    prob = clf.predict_proba(X_test)
+
+    #imp = clf.feature_importances_
+
+    df_test = pd.DataFrame(prob, columns=classes)
+    df_test['Class'] = pred
+    df_test['Class_prob'] = prob.max(axis=1)
+    df_test['name'] = test_name.tolist()
+
+    #df_imp = pd.DataFrame(columns = X_test.columns)
+    #df_imp.loc[len(df_imp)] = np.array(imp)
+
+    #test_path, test_pred = get_classification_path(clf, X_test, sample_id=0, verb=False)
+
+    return df_test#, df_imp#, test_path, test_pred
+
 def loo_save_res(res, dir_out):
     
     ii = []
@@ -907,12 +934,12 @@ def class_save_res(res, dir_out):
     paths = []
 
     for i, r in enumerate(res):
-        df_test, df_imp = r #, test_path, test_pred = r
+        df_test = r#, df_imp = r #, test_path, test_pred = r
 
         ii.append(i)
 
         df_classes.append(df_test)
-        df_imps.append(df_imp)
+        #df_imps.append(df_imp)
         #paths.append([test_path, test_pred])
 
     ii = np.argsort(ii)  
@@ -932,13 +959,14 @@ def class_save_res(res, dir_out):
     print(f'output files in {dir_out}:\nclasses.csv\nimps.csv\npaths.json')
     '''
 
-from bokeh.models import ColumnDataSource, FuncTickFormatter
+from bokeh.models import ColumnDataSource, FuncTickFormatter, Plot
 from bokeh.plotting import figure
 from bokeh.transform import dodge, linear_cmap
 import colorcet as cc
 
-def plot_confusion_matrix(df, 
+def plot_confusion_matrix(df,classes,
                           title='Normalized confusion matrix (%)',
+                          cm_type='recall',
                           normalize=True,                          
                           pallete=cc.fire[::-1],
                           fill_alpha=0.6,
@@ -947,9 +975,18 @@ def plot_confusion_matrix(df,
                           plot_zeroes=True
                          ):
 
-    classes = np.sort(df.true_Class.unique())
+    #classes = np.sort(df.true_Class.unique())
 
-    cm = confusion_matrix(df.true_Class, df.Class, labels=classes)
+    if cm_type=='recall':
+        xlabel, x_class='Predicted Class', 'Class'
+        ylabel, y_class='True Class', 'true_Class'
+    elif cm_type=='precision':
+        xlabel, x_class='True Class', 'true_Class'
+        ylabel, y_class='Predicted Class', 'Class'
+    else:
+        raise ValueError("Type must be recall or precision!")
+    
+    cm = confusion_matrix(df[y_class], df[x_class], labels=classes)
     
     if normalize:
         cm = 100 * cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
@@ -960,7 +997,7 @@ def plot_confusion_matrix(df,
             f = format(np.round(cm[i, j]).astype(int), 'd')  
             if not plot_zeroes and f == '0': continue # f = ''
             _.append([classes[i], classes[j], f])        
-    _ =  pd.DataFrame(dict(zip(['true_classes', 'classes', 'counts'], np.transpose(_))))         
+    _ =  pd.DataFrame(dict(zip([ylabel, xlabel, 'counts'], np.transpose(_))))         
     source = ColumnDataSource(_)
 
     p = figure(width=width, 
@@ -974,8 +1011,8 @@ def plot_confusion_matrix(df,
                # tools='hover'
               )
 
-    p.rect('classes', 
-           'true_classes', 
+    p.rect(xlabel, 
+           ylabel, 
            1, 
            1, 
            source=source, 
@@ -985,8 +1022,8 @@ def plot_confusion_matrix(df,
           )
 
     text_props = {'source': source, 'text_align': 'center', 'text_baseline': 'middle'}
-    x = dodge('classes', 0, range=p.x_range)
-    r = p.text(x=x, y='true_classes', text='counts', **text_props)
+    x = dodge(xlabel, 0, range=p.x_range)
+    r = p.text(x=x, y=ylabel, text='counts', **text_props)
     r.glyph.text_font_style='bold'
 
     p.outline_line_color = None
@@ -995,8 +1032,8 @@ def plot_confusion_matrix(df,
     p.axis.major_label_text_font_size = '10pt'
     p.xaxis.major_label_orientation = np.pi/4
 
-    p.yaxis.axis_label = 'True class'
-    p.xaxis.axis_label = 'Predicted class'
+    p.yaxis.axis_label = ylabel 
+    p.xaxis.axis_label = xlabel
 
     p.axis.axis_label_text_font_size = '18pt'
     p.axis.axis_label_text_font_style = 'normal'
@@ -1006,7 +1043,7 @@ def plot_confusion_matrix(df,
 
     p.axis.major_label_standoff = 5
         
-    class_abun = df.true_Class.value_counts().to_dict()        
+    class_abun = df[y_class].value_counts().to_dict()        
     y_labels = {_: f'{_}\n{class_abun[_]}' for _ in p.y_range.factors}    
     p.yaxis.formatter = FuncTickFormatter(code=f'''
             var labels = {y_labels}
@@ -1093,6 +1130,9 @@ def confident_flag(df, method = 'sigma-mean', thres=2., class_cols=['AGN','CV','
 
     if method == 'sigma-qt':
         df['conf_flag'] = df.apply(lambda row: row.conf_flag+2 if row.Class_prob_2sig_low - sorted(row[[c for c in df.columns if 'P_2sig_upp' in c]])[-2] > 0 else row.conf_flag, axis=1)
+
+    if method == 'hard-cut':
+        df.loc[df.Class_prob>thres, 'conf_flag'] = df.loc[df.Class_prob>thres, 'conf_flag']+4
 
     return df 
 
@@ -1426,6 +1466,7 @@ plt.rcParams.update(params)
 def plot_classifier_matrix_withSTD(probs, stds, pred, yaxis, classes, normalize=False,
                            title=False, nocmap=False, 
                            cmap=plt.cm.Blues):
+    textsize=20
     if not title:
         title = 'Classifier matrix'
     length = len(pred)
@@ -1436,12 +1477,12 @@ def plot_classifier_matrix_withSTD(probs, stds, pred, yaxis, classes, normalize=
     probs = np.array(probs)
     # We want to show all ticks...
     ax.set(xticks=np.arange(probs.shape[1]),
-           yticks=np.arange(probs.shape[0]),
+           yticks=np.arange(probs.shape[0]))#,
            # ... and label them with the respective list entries
-           xticklabels=classes, yticklabels=yaxis,
-           title=title,
+           #xticklabels=classes, yticklabels=yaxis,
+           #title=title)#,
            #ylabel='True label',
-           xlabel='Class')
+           #xlabel='Class')
         
     # Rotate the tick labels and set their alignment.
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
@@ -1454,7 +1495,61 @@ def plot_classifier_matrix_withSTD(probs, stds, pred, yaxis, classes, normalize=
         for j in range(probs.shape[1]):
             ax.text(j, i, "{:.2f} \n".format(probs[i,j])+r"$\pm$"+"{:.2f}".format(stds[i,j]),
                     ha="center", va="center",
-                    color="white" if probs[i, j] > thresh else "black")
+                    color="white" if probs[i, j] > thresh else "black",fontsize=textsize)
+    
+    #ax.set_xticklabels(('0','1','2','3','4','5','6','7','8','9'),fontweight='bold',fontsize=texts)
+    ax.set_title(title,fontsize=textsize*1.2)
+    ax.set_xticklabels(classes,fontsize=textsize)
+    ax.set_yticklabels(yaxis,fontsize=textsize)
 
     fig.tight_layout()
     return fig
+
+figs1, figs2 = 10., 12. 
+texts = 15 # text fontsize
+
+def plot_Feature_Importance_withSTD(imp, std, features, fig_width, fig_height):
+    #sbn.set_style("white")
+    N = len(imp)
+    
+    ind = np.arange(N)  # the x locations for the groups
+    
+    width = 0.7#16./N *2.      # the width of the bars
+    
+    fig, ax = plt.subplots(figsize=(fig_width/80, fig_height/80))
+    rects1 = ax.barh(ind, imp*100, width, xerr=std*100, ecolor='orange')
+    #rects2 = ax.barh(ind, imp_noran*100, width, xerr=std_noran*100, alpha=0, ecolor='red')
+    #rects2 = ax.bar(ind + width, lassoo*100, width, color='g')
+    # add some text for labels, title and axes ticks
+    ax.set_xlabel('Importance (in % usage)',fontweight='bold',fontsize=texts)
+    ax.set_xticks(range(10))
+    ax.set_xticklabels(('0','1','2','3','4','5','6','7','8','9'),fontweight='bold',fontsize=texts)
+    ax.set_title('Feature Importance',fontweight='bold',fontsize=texts*1.2)
+    ax.set_yticks(ind)
+    ax.set_yticklabels(features,fontweight='bold',fontsize=texts/1.5)
+    
+    #ax.legend(rects1[0], ('Random Forest Regressor'))
+    ax.set_xlim(0,9)
+    ax.set_ylim(-0.5,N+0.5)
+
+    
+    #print('There are ',len(features), ' features')
+    #print(features)
+    #print(imp)
+    for threshold, color in zip([1.], ['red']):#zip([0.8, 1., 1.5], ['orange','red','green']):
+        
+        thres = threshold/100.
+        plt.axvline(threshold,color=color)
+        
+        
+        index_feature_select = np.where(imp>thres)[0]
+        features_selected = np.array(features)[index_feature_select]
+        features_selected_imp = imp[index_feature_select]
+        #print('There are ',len(features_selected), ' features selected with thres at', str(threshold))
+        #print( features_selected, ' as Selected features')
+        #print(features_selected_imp, ' as Selected features imps')
+    #plt.show()
+    #fig.tight_layout()
+    return fig
+
+
