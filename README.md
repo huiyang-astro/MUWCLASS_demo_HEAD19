@@ -4,6 +4,8 @@
 ### Hui Yang1, Jeremy Hare2, Oleg Kargaltsev1, Igor Volkov1
 ### 1 The George Washington University 2 NASA GSFC
 
+### contact huiyang@gwu.edu if you have any questions
+
 This notebook presents a demonstration of classifying Chandra Source Catalog v2 (CSCv2) using the MUltiWavelength Machine Learning CLASSification Pipeline with CSCv2 and multiwavelength data
 
 * This notebook was run in CIAO 4.14 with Python 3.9 
