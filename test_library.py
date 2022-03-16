@@ -96,7 +96,7 @@ from sklearn.preprocessing import StandardScaler
 standscaler = StandardScaler()
 ML_scaler = standscaler # the scaler selected
 
-scaler_switch = False # for ML_model = RFmodel
+scaler_switch = True # for ML_model = RFmodel
 
 def col_rename(df):
 

@@ -366,14 +366,15 @@ pd.set_option('display.max_rows', None)
 frequencies = np.array([6.492e+13, 8.901e+13, 1.389e+14, 1.804e+14, 2.427e+14, 3.859e+14, 4.822e+14, 5.867e+14, 2.220e+17, 3.772e+17, 9.190e+17])
 
 # zero points for converting from mags to fluxes from http://svo2.cab.inta-csic.es/svo/theory/fps3/index.php?mode=browse
-zps = np.array([171.79, 309.54, 666.80, 1024.00, 1594.00, 2461.22, 2861.30, 3478.80])
-
+# 'W2mag', 'W1mag', 'Kmag', 'Hmag', 'Jmag', 'RPmag', 'Gmag', 'BPmag'
+zps      = np.array([171.79,   309.54,   666.80,   1024.00,  1594.00, 2461.22, 2861.30, 3478.80])
+zps_wave = np.array([2.42e-12, 8.18e-12, 4.28e-11, 1.13e-10, 3.13e-10, 1.27e-9, 2.5e-9, 4.08e-9])
 # calculate width of frequency range of band from effective width of wavelength range and reference wavelength
 def width(ref, weff):
     return (ap.constants.c/((ref-weff/2)*u.angstrom) - ap.constants.c/((ref+weff/2)*u.angstrom)).to(u.Hz).value
 
 refs = np.array([46179.05, 33682.21, 21603.09, 16457.50, 12358.09, 7829.66, 6251.51, 5124.20])
-weffs = np.array([10422.66, 6626.42, 2618.87, 2509.40, 1624.32, 2842.11, 4203.60, 2333.06])
+weffs = np.array([10422.66, 6626.42, 2618.87, 2509.40, 1624.32, 2924.44, 4052.97, 2157.50])#2842.11, 4203.60, 2333.06])
 
 widths= width(refs, weffs)
 
@@ -409,7 +410,8 @@ def prepare_sed(df_mw, name_col=False):
         # set fluxes for bands with mags
         if i in range(0,8):
             df_spec.loc[band.index, 'Mag']=df_mw.iloc[:,i].to_numpy()
-            df_spec.loc[band.index, 'Flux']=zps[i]*pow(10,-df_spec.loc[band.index, 'Mag']/2.5)*widths[i]*1e-23
+            #df_spec.loc[band.index, 'Flux']=zps[i]*pow(10,-df_spec.loc[band.index, 'Mag']/2.5)*widths[i]*1e-23
+            df_spec.loc[band.index, 'Flux']=zps_wave[i]*pow(10,-df_spec.loc[band.index, 'Mag']/2.5)*weffs[i]#widths[i]*1e-23
 
         # set fluxes for Chandra bands
         if i in range(8,11):
@@ -491,7 +493,7 @@ def plot_sed(TD_spec, field_spec, dir_plot, plot_class='YSO', save_html=False, n
     #classes = ['AGN', 'NS', 'BINARY-NS', 'CV', 'LM-STAR', 'HM-STAR', 'LMXB', 'HMXB', 'YSO']
     #classes = ['AGN', 'NS', 'CV', 'LM-STAR', 'HM-STAR', 'LMXB', 'HMXB', 'YSO']
 
-    scale_down=4
+    scale_down=6
 
     #for c in classes:
     TD_hover_cols = ['Flux', 'Band']
@@ -603,7 +605,10 @@ def plot_class_matrix(field_name, df, dir_plot, class_labels):
         plt.close(fig)
 
     df_plot = df.sort_values(by=['Class_prob'])
-    df_plot = df_plot.iloc[[0, -1]]
+    if len(df_plot)>=5:
+        df_plot = pd.concat([df_plot.head(3), df_plot.tail(2)]) #iloc[[:2, -4:-1]]
+    else:
+        df_plot = df_plot.iloc[[0, -1]]
     #df_plot = df[(df.name==df_conf.iloc[0]['name']) | (df.name==df[~df.name.isin(df_conf.name)].iloc[0]['name'])].reset_index(drop=True)
 
     #print(df_plot)
@@ -909,8 +914,8 @@ def interactive_Ximg_class(field_name, evt2_data, fn_evt2, dir_out):
             # ylim=(1e28,1e32),
             xlabel="pixel",
             ylabel="pixel",
-            width=int(1200),
-            height=int(1200),
+            width=int(800),
+            height=int(800),
             fontscale=1,
             legend_position='top_left',
             fontsize={
