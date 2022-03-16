@@ -560,7 +560,7 @@ def plot_bbsed(TD, field, dir_plot, plot_class='YSO', save_class=['YSO','AGN'], 
 
     field_sed = field.copy()
     for band in ['s', 'm', 'h']:
-        print(field_sed.loc[field_sed['Fcsc_'+band]<1e-17, 'Fcsc_'+band])
+        #print(field_sed.loc[field_sed['Fcsc_'+band]<1e-17, 'Fcsc_'+band])
         field_sed.loc[field_sed['Fcsc_'+band]<1e-17, 'Fcsc_'+band] = np.nan
 
     field_sed = field_sed.dropna(subset=['Fcsc_s','Fcsc_m','Fcsc_h','Gmag','BPmag','RPmag','Jmag','Hmag','Kmag','W1mag','W2mag','W3mag']).reset_index(drop=True)
