@@ -557,12 +557,35 @@ def plot_sed(TD_spec, field_spec, dir_plot, plot_class='YSO', save_html=False, n
     #'''
     
 def plot_bbsed(TD, field, dir_plot, plot_class='YSO', save_class=['YSO','AGN'], confidence=True, TD_name_col=False):
+
+    field_sed = field.copy()
+    for band in ['s', 'm', 'h']:
+        print(field_sed.loc[field_sed['Fcsc_'+band]<1e-17, 'Fcsc_'+band])
+        field_sed.loc[field_sed['Fcsc_'+band]<1e-17, 'Fcsc_'+band] = np.nan
+
+    field_sed = field_sed.dropna(subset=['Fcsc_s','Fcsc_m','Fcsc_h','Gmag','BPmag','RPmag','Jmag','Hmag','Kmag','W1mag','W2mag','W3mag']).reset_index(drop=True)
+
+    TD_sed = TD.copy()
+    for band in ['s', 'm', 'h']:
+        TD_sed.loc[TD_sed['Fcsc_'+band]<1e-17, 'Fcsc_'+band] = np.nan
+
+        
+    #TD_sed = TD_sed[~TD_sed[['Fcsc_s','Fcsc_m','Fcsc_h','Gmag','BPmag','RPmag','Jmag','Hmag','Kmag','W1mag','W2mag','W3mag']].isnull()]
+    TD_sed = TD_sed.dropna(subset=['Fcsc_s','Fcsc_m','Fcsc_h']).reset_index(drop=True)#,'Gmag','BPmag','RPmag','Jmag','Hmag','Kmag','W1mag','W2mag','W3mag']).reset_index(drop=True)
+
+    TD_NS = TD_sed[TD_sed.Class=='NS'].reset_index(drop=True)
+    mw_cols = ['Gmag','BPmag','RPmag','Jmag','Hmag','Kmag','W1mag','W2mag','W3mag']
+    TD_NS[mw_cols] = np.nan
+    TD_noNS = TD_sed[TD_sed.Class!='NS'].reset_index(drop=True)
+    TD_noNS = TD_noNS.dropna(subset=mw_cols).reset_index(drop=True)#,'Gmag','BPmag','RPmag','Jmag','Hmag','Kmag','W1mag','W2mag','W3mag']).reset_index(drop=True)
+
+    TD_sed = pd.concat([TD_noNS, TD_NS]).reset_index(drop=True)
     
-    TD_mw, TD_spec = prepare_sed(TD, name_col=TD_name_col)
+    TD_mw, TD_spec = prepare_sed(TD_sed, name_col=TD_name_col)
     #print(TD_spec.loc[0])
     if confidence:
-        field = field[field.conf_flag>0].reset_index(drop=True)
-    field_mw, field_spec = prepare_sed(field, name_col='name')
+        field_sed = field_sed[field_sed.conf_flag>0].reset_index(drop=True)
+    field_mw, field_spec = prepare_sed(field_sed, name_col='name')
     
     #print(field_spec.loc[0])
     
